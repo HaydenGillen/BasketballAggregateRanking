@@ -1,0 +1,31 @@
+# Put this file at .github/workflows/run.yml in a repo that also contains rank_blend.py.
+# It runs the script and saves the finished page, rank_blend.html, as a downloadable artifact.
+name: Run Rank Blend
+
+on:
+  workflow_dispatch:        # the "Run workflow" button on the Actions tab
+  schedule:
+    - cron: "0 11 * * *"    # every day at 11:00 UTC (6 AM US Eastern). Delete these two lines to run only by hand.
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the rankings page
+        env:
+          # Optional. Only needed if KenPom asks for a login. Add them under
+          # Settings > Secrets and variables > Actions. Leave them out otherwise.
+          KENPOM_EMAIL: ${{ secrets.KENPOM_EMAIL }}
+          KENPOM_PASSWORD: ${{ secrets.KENPOM_PASSWORD }}
+        run: python rank_blend.py --no-open --out rank_blend.html
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rank-blend
+          path: rank_blend.html
