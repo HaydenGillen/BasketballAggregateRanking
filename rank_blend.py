@@ -30,6 +30,7 @@ import webbrowser
 from html.parser import HTMLParser
 from pathlib import Path
 
+NOTES = []  # shown under the page title, e.g. when a source comes from a saved copy
 SOURCES = ["kenpom", "torvik", "evanmiya"]
 LABELS = {"kenpom": "KenPom", "torvik": "Torvik", "evanmiya": "EvanMiya"}
 
@@ -660,7 +661,8 @@ def render(blended, sources):
         )
     full = sum(1 for x in blended if x["n"] == len(sources))
     summary = (f"{len(blended)} teams from {', '.join(LABELS[s] for s in sources)}; "
-               f"{full} appear in every list. Generated {datetime.datetime.now():%b %d, %Y %I:%M %p}.")
+               f"{full} appear in every list. Generated {datetime.datetime.now():%b %d, %Y %I:%M %p}."
+               + "".join(" " + n for n in NOTES))
     return (PAGE.replace("__SUMMARY__", html.escape(summary))
                 .replace("__HEADERS__", headers)
                 .replace("__ROWS__", "\n".join(rows)))
@@ -708,6 +710,17 @@ def main():
                 for snap in snaps:
                     for key, val in parse_any(snap).items():
                         rows.setdefault(key, val)
+        if not rows and not spec:
+            # Live fetch failed (sites sometimes block GitHub's servers). Use a copy saved in data/.
+            for ext in ("html", "csv", "json", "txt"):
+                saved = Path(__file__).resolve().parent / "data" / f"{s}.{ext}"
+                if saved.is_file():
+                    rows = parse_any(saved.read_text(encoding="utf-8", errors="replace"))
+                    if rows:
+                        day = datetime.date.fromtimestamp(saved.stat().st_mtime)
+                        NOTES.append(f"{LABELS[s]} comes from a saved copy dated {day:%b %d, %Y}.")
+                        print(f"  live fetch failed, using saved copy {saved.name} ({day}).")
+                        break
         if not rows:
             print("  no rankings found, skipping.", file=sys.stderr)
             continue
@@ -752,4 +765,3 @@ def _run():
 
 if __name__ == "__main__":
     _run()
-
