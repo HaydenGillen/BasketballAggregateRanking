@@ -47,6 +47,16 @@ def default_url(name):
     }[name]
 
 
+def candidate_urls(name):
+    """Addresses to try in order. Torvik is tried as the page, then as JSON, then as its CSV data file."""
+    y = season_year()
+    if name == "torvik":
+        return [f"https://barttorvik.com/trank.php?year={y}",
+                f"https://barttorvik.com/trank.php?year={y}&json=1",
+                f"https://barttorvik.com/{y}_team_results.csv"]
+    return [default_url(name)]
+
+
 # ---------------------------------------------------------------- fetching
 
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -78,7 +88,7 @@ def load(name, spec):
     if name == "kenpom":
         kenpom_login(opener)  # optional; the public page already lists every team
     data = None
-    if name == "torvik":
+    if name == "torvik" and "trank.php" in url and "json" not in url:
         # Torvik serves a "verifying your browser" page unless this form field is posted.
         data = b"js_test_submitted=1"
     return opener.open(url, data, timeout=30).read().decode("utf-8", errors="replace")
@@ -676,10 +686,16 @@ def main():
         spec = getattr(args, s)
         rows = {}
         is_file = bool(spec) and not re.match(r"https?://", spec)
-        try:
-            rows = parse_any(load(s, spec))
-        except Exception as e:  # network errors, missing files, blocked requests
-            print(f"  could not load ({e}).", file=sys.stderr)
+        for url in ([spec] if spec else candidate_urls(s)):
+            try:
+                text = load(s, url)
+            except Exception as e:  # network errors, blocked requests, missing files
+                print(f"  {url}\n    failed: {e}", file=sys.stderr)
+                continue
+            rows = parse_any(text)
+            if rows:
+                break
+            print(f"  {url}\n    no rankings found. The response began: {clean(text[:150])!r}", file=sys.stderr)
         # EvanMiya's raw page only has the first rows, so use a browser unless we already got everything.
         if not is_file and (not rows or (s == "evanmiya" and len(rows) < 300)):
             print("  trying a rendered browser (needs Playwright)...")
@@ -736,3 +752,4 @@ def _run():
 
 if __name__ == "__main__":
     _run()
+
